@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Offline Editor Loader with Info</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    color: white;
+    height: 100%;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+
+#topBar {
+    height: 60px;
+    background: #111;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid #333;
+}
+
+#viewer {
+    width: 100%;
+    height: calc(100vh - 60px);
+    border: none;
+    background: #000;
+}
+
+select, button {
+    background: #222;
+    color: white;
+    border: 1px solid #444;
+    padding: 5px;
+}
+</style>
+</head>
+<body>
+
+<div id="topBar">
+    <label>Build:</label>
+    <select id="fileSelect">
+        <option value="a1.html">a1.html</option>
+        <option value="a2.html" selected>a2.html</option>
+        <option value="a3.html">a3.html</option>
+        <option value="a4.html">a4.html</option>
+        <option value="a5.html">a5.html</option>
+        <option value="b1.html">b1.html</option>
+        <option value="b2.html">b2.html</option>
+        <option value="b3.html">b3.html</option>
+        <option value="b4.html">b4.html</option>
+        <option value="b5.html">b5.html</option>
+    </select>
+
+    <label>Font:</label>
+    <select id="fontSelect">
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="'Courier New', monospace">Courier New</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+        <option value="'Times New Roman', serif">Times</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+    </select>
+
+    <button id="loadBtn">Load</button>
+    <button id="saveSongBtn">Save Song</button>
+    <button id="loadSongBtn">Load Song</button>
+    <button id="infoBtn">Info</button>
+    <input type="file" id="songFileInput" style="display:none">
+</div>
+
+<iframe id="viewer" src="a2.html"></iframe>
+
+<script>
+const viewer = document.getElementById("viewer");
+const fileSelect = document.getElementById("fileSelect");
+const fontSelect = document.getElementById("fontSelect");
+const loadBtn = document.getElementById("loadBtn");
+const saveSongBtn = document.getElementById("saveSongBtn");
+const loadSongBtn = document.getElementById("loadSongBtn");
+const infoBtn = document.getElementById("infoBtn");
+const songFileInput = document.getElementById("songFileInput");
+
+// Save/load loader settings
+function saveSettings() {
+    localStorage.setItem("selectedBuild", fileSelect.value);
+    localStorage.setItem("selectedFont", fontSelect.value);
+}
+window.addEventListener("load", () => {
+    const savedBuild = localStorage.getItem("selectedBuild");
+    const savedFont = localStorage.getItem("selectedFont");
+    if (savedBuild) {
+        fileSelect.value = savedBuild;
+        viewer.src = savedBuild;
+    }
+    if (savedFont) {
+        fontSelect.value = savedFont;
+        document.body.style.fontFamily = savedFont;
+    }
+
+    // Inject saved song after iframe loads
+    viewer.addEventListener("load", injectSavedSong);
+});
+
+// Inject last saved song
+function injectSavedSong() {
+    const savedSong = localStorage.getItem("savedSongData");
+    if (!savedSong) return;
+    const interval = setInterval(() => {
+        const editor = viewer.contentWindow.beepbox?.editor || viewer.contentWindow.beepbox?.Editor;
+        if (editor && typeof editor.setSongFromString === "function") {
+            try {
+                editor.setSongFromString(savedSong);
+                clearInterval(interval);
+            } catch(e) {
+                console.warn("Failed to load song:", e);
+            }
+        }
+    }, 100);
+}
+
+// Load button
+loadBtn.addEventListener("click", () => {
+    viewer.src = fileSelect.value;
+    saveSettings();
+    viewer.addEventListener("load", injectSavedSong, {once:true});
+});
+
+// Font selector
+fontSelect.addEventListener("change", () => {
+    document.body.style.fontFamily = fontSelect.value;
+    saveSettings();
+});
+
+// Save song button
+saveSongBtn.addEventListener("click", () => {
+    const editor = viewer.contentWindow.beepbox?.editor || viewer.contentWindow.beepbox?.Editor;
+    if (!editor || !editor.getSongString) return alert("Editor not ready");
+    const songData = editor.getSongString();
+    localStorage.setItem("savedSongData", songData);
+
+    // Download as JSON
+    const blob = new Blob([songData], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "song.json";
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+// Load song button
+loadSongBtn.addEventListener("click", () => songFileInput.click());
+songFileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const songData = ev.target.result;
+        const editor = viewer.contentWindow.beepbox?.editor || viewer.contentWindow.beepbox?.Editor;
+        if (!editor || !editor.setSongFromString) return alert("Editor not ready");
+        editor.setSongFromString(songData);
+        localStorage.setItem("savedSongData", songData);
+    };
+    reader.readAsText(file);
+});
+
+// Info button loads vdata.html
+infoBtn.addEventListener("click", () => {
+    viewer.src = "vdata.html";
+});
+</script>
+
+</body>
+</html>
